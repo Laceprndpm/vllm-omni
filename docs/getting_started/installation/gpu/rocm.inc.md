@@ -149,6 +149,8 @@ vllm-omni-rocm
 
 vLLM-Omni offers an official docker image for deployment. These images are built on top of vLLM docker images and available on Docker Hub as [vllm/vllm-omni-rocm](https://hub.docker.com/r/vllm/vllm-omni-rocm/tags). The version of vLLM-Omni indicates which release of vLLM it is based on.
 
+The prebuilt ROCm image is published separately from the release pipeline: `v0.28.0` is the latest tag currently available on Docker Hub, and newer-tag availability is tracked in [#7405](https://github.com/vllm-project/vllm-omni/issues/7405).
+
 #### Launch vLLM-Omni Server
 
 Here's an example deployment command that has been verified on 2 x MI300's:
@@ -165,7 +167,7 @@ docker run --rm \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   --env "HF_TOKEN=$HF_TOKEN" \
   -p 8091:8091 \
-  vllm/vllm-omni-rocm:v0.30.0 \
+  vllm/vllm-omni-rocm:v0.28.0 \
   --model Qwen/Qwen3-Omni-30B-A3B-Instruct --omni --port 8091
 ```
 
@@ -186,7 +188,7 @@ docker run --rm -it \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   --env "HF_TOKEN=$HF_TOKEN" \
   --entrypoint bash \
-  vllm/vllm-omni-rocm:v0.30.0
+  vllm/vllm-omni-rocm:v0.28.0
 ```
 
 # --8<-- [end:pre-built-images]
