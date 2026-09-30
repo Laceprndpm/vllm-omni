@@ -287,7 +287,7 @@ def test_handle_connection_closes_websocket_on_idle_timeout(monkeypatch):
     async def never_receives():
         await asyncio.sleep(1)
 
-    websocket.receive = never_receives
+    monkeypatch.setattr(websocket, "receive", never_receives)
     serving = MagicMock()
     serving.policy_server_config = PolicyServerConfig(
         {

@@ -240,8 +240,8 @@ class _AutoDenoiseProfilerPipeline(DiffusionPipelineProfilerMixin):
 class _InterruptingStepPipeline(_StepPipeline):
     interrupt = True
 
-    def denoise_step(self, state, **kwargs):
-        del state, kwargs
+    def denoise_step(self, input_batch, **kwargs):
+        del input_batch, kwargs
         self.denoise_calls += 1
         return None
 
@@ -1122,6 +1122,8 @@ class TestRunner:
         kv_payload = object()
 
         class _CapturingStepPipeline(_StepPipeline):
+            device = torch.device("cpu")
+
             def prepare_encode(self, state, **kwargs):
                 captured["past_key_values"] = getattr(state.sampling, "past_key_values", None)
                 return super().prepare_encode(state, **kwargs)
@@ -1133,7 +1135,6 @@ class TestRunner:
                 req.sampling_params.past_key_values = kv_payload
 
         runner.pipeline = _CapturingStepPipeline()
-        runner.pipeline.device = torch.device("cpu")
         runner.od_config.cfg_kv_collect_func = "collect-cfg"
         runner.kv_transfer_manager = _KVTransferManager()
         monkeypatch.setattr(model_runner_module, "set_forward_context", _noop_forward_context)
