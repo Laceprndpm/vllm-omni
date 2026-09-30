@@ -89,7 +89,7 @@ def test_pi05_openpi_online(omni_server):
     assert metadata["action_space"] == "joint_position"
 
 
-@pytest.mark.full_model
+@pytest.mark.slow
 @pytest.mark.diffusion
 @hardware_test(res={"cuda": "H100"})
 @pytest.mark.parametrize(
