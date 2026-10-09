@@ -6,11 +6,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from vllm_omni.diffusion.data import OmniDiffusionConfig
-from vllm_omni.diffusion.request import OmniDiffusionRequest
 from vllm_omni.diffusion.worker.diffusion_model_runner import DiffusionModelRunner
-from vllm_omni.diffusion.worker.utils import StepRequestState
-from vllm_omni.inputs.data import OmniDiffusionSamplingParams
 
 pytestmark = [pytest.mark.core_model, pytest.mark.cpu, pytest.mark.diffusion]
 
@@ -74,7 +70,7 @@ def _make_runner(connector, *, payload_keys=("text_encoder_output",), recv_stage
 
 def _make_sender(connector, *, payload_keys=("prompt_embeds",), send_stages=("0", "1")):
     runner = object.__new__(DiffusionModelRunner)
-    runner.od_config = OmniDiffusionConfig(stage_output_payload_keys=payload_keys, stage_id=0)
+    runner.od_config = SimpleNamespace(stage_output_payload_keys=payload_keys, stage_id=0)
     runner.device = torch.device("cpu")
     runner.pipeline = None
     runner.kv_transfer_manager = _FakeKVTransferManager(connector, send_stages=send_stages)
@@ -622,16 +618,10 @@ def test_failed_transfer_requires_complete_inline_payload(inline):
         runner._maybe_recv_stage_payload(_make_request({"additional_information": inline}))
 
 
-@pytest.mark.parametrize("step_execution", [False, True], ids=["full-request", "step-state"])
-def test_send_puts_declared_keys_and_attaches_a_handle(step_execution):
+def test_send_puts_declared_keys_and_attaches_a_handle():
     connector = _FakeConnector()
     runner = _make_sender(connector)
-    sampling = OmniDiffusionSamplingParams(seed=42)
-    req = (
-        StepRequestState(request_id="req-7", sampling=sampling)
-        if step_execution
-        else OmniDiffusionRequest(prompt={"prompt": "a cat"}, request_id="req-7", sampling_params=sampling)
-    )
+    req = _make_request({"prompt": "a cat"})
     output = _make_output(prompt_embeds=torch.zeros(2, 8), latents=torch.zeros(1, 4))
 
     runner._maybe_send_stage_payload([req], [output])

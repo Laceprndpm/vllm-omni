@@ -147,9 +147,7 @@ Send concurrent observations on independent WebSocket connections to
 compatible requests share denoising steps and may have different positive
 `sampling_params.num_inference_steps` values. Custom `timesteps` and `sigmas`
 are unsupported. The response remains one final action chunk, not streamed
-partial actions. Disconnecting a client cancels its pending inference; reset
-messages retain their connection order. More than eight pending messages on
-one busy connection closes it with code 1013.
+partial actions.
 
 Capacity one has no cross-request batching benefit and may add scheduler
 overhead. For reproducible full/step comparisons at equal precision, see the

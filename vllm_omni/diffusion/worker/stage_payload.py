@@ -1,10 +1,6 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
-
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 from vllm.logger import init_logger
@@ -12,10 +8,6 @@ from vllm.logger import init_logger
 from vllm_omni.diffusion.data import DiffusionOutput
 from vllm_omni.diffusion.request import OmniDiffusionRequest
 from vllm_omni.worker.omni_connector_model_runner_mixin import OmniConnectorModelRunnerMixin
-
-if TYPE_CHECKING:
-    from vllm_omni.diffusion.data import OmniDiffusionConfig
-    from vllm_omni.diffusion.worker.utils import StepRequestState
 
 logger = init_logger(__name__)
 
@@ -33,13 +25,6 @@ def _to_device(value: Any, device: torch.device) -> Any:
 
 class DiffusionStagePayloadMixin(OmniConnectorModelRunnerMixin):
     """Adapt diffusion prompts and outputs to shared connector transport."""
-
-    if TYPE_CHECKING:
-        od_config: OmniDiffusionConfig
-        device: torch.device
-
-        @property
-        def _target_device(self) -> torch.device | None: ...
 
     _STAGE_PAYLOAD_HANDLE_KEY = "_stage_payload_transfer"
 
@@ -105,7 +90,7 @@ class DiffusionStagePayloadMixin(OmniConnectorModelRunnerMixin):
 
     def _maybe_send_stage_payload(
         self,
-        reqs: Sequence[OmniDiffusionRequest | StepRequestState],
+        reqs: list[OmniDiffusionRequest],
         outputs: list[DiffusionOutput],
     ) -> None:
         """Publish complete leader outputs; keep inline values if the put fails.
