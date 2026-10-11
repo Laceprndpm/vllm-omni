@@ -1,3 +1,5 @@
+> Updated review follow-up: [2026-10-11 CPU, native mp/TP2 and HTTP evidence](revision/README.md). The material below records the original investigation.
+
 # Step-request idle lifecycle evidence
 
 This bundle accompanies an independent vLLM-Omni framework fix. It is unrelated to Pi0.5 D0 PR #8331.
