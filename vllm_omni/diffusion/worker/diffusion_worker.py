@@ -742,8 +742,19 @@ class DiffusionWorker:
         self._activate_step_lora(scheduler_output)
         profiler = self._get_profiler()
         ctx = profiler.annotate_context_manager("diffusion_step") if profiler else nullcontext()
-        with ctx:
-            output = self.model_runner.execute_stepwise(scheduler_output)
+        try:
+            with ctx:
+                output = self.model_runner.execute_stepwise(scheduler_output)
+        except Exception:
+            # The engine terminates every scheduled request when execution raises.
+            for request_id in scheduler_output.scheduled_request_ids:
+                self._step_lora_state.pop(request_id, None)
+            raise
+        # The runner owns model state; retire the worker's metadata before idle.
+        for request_id in scheduler_output.scheduled_request_ids:
+            request_output = output.get_request_output(request_id)
+            if request_output is not None and request_output.finished:
+                self._step_lora_state.pop(request_id, None)
         if profiler:
             profiler.step()
         return output
