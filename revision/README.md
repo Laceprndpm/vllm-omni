@@ -14,3 +14,5 @@ This revision fixes reused-ID terminal notification and Worker bookkeeping. Both
 Unzip the archive into a source checkout to access its self-contained `step-lifecycle-revision/README.md`, exact commands and `SHA256SUMS`. Use fresh output directories for every run. CPU tests require Python 3.12, vLLM 0.31.0 and matching project test dependencies; native scripts additionally need the specified hardware and complete pretrained weights. Full environment limitations and pre-commit failures already present on the baseline are included in the reports.
 
 Archive SHA256: `040eea934d20b7dc83b460302bcdc6926bc5fcdc060e1242dadced97fd021018`
+
+Published text: [PR body](pr-body.md) and [review response comment](pr-comment.md). Both were verified against [PR #8719](https://github.com/vllm-project/vllm-omni/pull/8719) and the [posted comment](https://github.com/vllm-project/vllm-omni/pull/8719#issuecomment-6105742034).
