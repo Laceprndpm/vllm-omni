@@ -1728,6 +1728,52 @@ class Pi05ForActionPrediction(nn.Module):
 
     # ── Full action generation ───────────────────────────────────────
     @torch.no_grad()
+    def initialize_noise(
+        self,
+        lang_tokens: torch.Tensor,
+        generator: torch.Generator | list[torch.Generator] | None = None,
+    ) -> torch.Tensor:
+        """Request-local FP32 noise, shared by full and step execution."""
+        bsize = lang_tokens.shape[0]
+        shape = (self.action_horizon, self.action_dim)
+        if isinstance(generator, list):
+            if len(generator) != bsize:
+                raise ValueError(f"Expected {bsize} generators, got {len(generator)}.")
+            return torch.stack(
+                [torch.randn(shape, dtype=torch.float32, device=lang_tokens.device, generator=g) for g in generator]
+            )
+        return torch.randn(bsize, *shape, dtype=torch.float32, device=lang_tokens.device, generator=generator)
+
+    @torch.no_grad()
+    def encode_prefix(
+        self,
+        images: list[torch.Tensor],
+        image_masks: list[torch.Tensor],
+        lang_tokens: torch.Tensor,
+        lang_masks: torch.Tensor,
+    ) -> tuple[torch.Tensor, Pi05KVCache]:
+        """Encode conditioning into a fresh request-owned cache.
+
+        Step execution must never borrow ``self.kv_cache`` or graph buffers:
+        admitting another request must leave this prefix unchanged.
+        """
+        prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
+            images, image_masks, lang_tokens, lang_masks
+        )
+        batch_size, prefix_len = prefix_embs.shape[:2]
+        kv_cache = self.new_kv_cache(batch_size, prefix_len)
+        prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
+        prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
+        _, past_key_values = self.paligemma_with_expert.forward(
+            attention_mask=prepare_attention_masks_4d(prefix_att_2d_masks),
+            position_ids=prefix_position_ids,
+            past_key_values=kv_cache,
+            inputs_embeds=[prefix_embs, None],
+            use_cache=True,
+        )
+        return prefix_pad_masks, past_key_values
+
+    @torch.no_grad()
     def sample_actions(
         self,
         images: list[torch.Tensor],
@@ -1751,21 +1797,7 @@ class Pi05ForActionPrediction(nn.Module):
         bsize = lang_tokens.shape[0]
         device = lang_tokens.device
         if noise is None:
-            noise_shape = (self.action_horizon, self.action_dim)
-            if isinstance(generator, list):
-                if len(generator) != bsize:
-                    raise ValueError(f"Expected {bsize} generators, got {len(generator)}.")
-                noise = torch.stack(
-                    [torch.randn(noise_shape, dtype=torch.float32, device=device, generator=item) for item in generator]
-                )
-            else:
-                noise = torch.randn(
-                    bsize,
-                    *noise_shape,
-                    dtype=torch.float32,
-                    device=device,
-                    generator=generator,
-                )
+            noise = self.initialize_noise(lang_tokens, generator)
 
         # The three regions below run through CUDA graphs when installed; each
         # falls back to its eager call on its own.

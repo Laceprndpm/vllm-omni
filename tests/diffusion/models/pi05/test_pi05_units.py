@@ -322,6 +322,14 @@ def test_pipeline_rejects_missing_model_weights_before_initialization(tmp_path):
         pipeline._initialize_model()
 
 
+def test_step_execution_requires_enforce_eager_before_model_loading(tmp_path):
+    from vllm_omni.diffusion.data import OmniDiffusionConfig
+    from vllm_omni.diffusion.models.pi05.pipeline_pi05 import Pi05Pipeline
+
+    with pytest.raises(ValueError, match="enforce_eager"):
+        Pi05Pipeline(od_config=OmniDiffusionConfig(model=str(tmp_path), step_execution=True, enforce_eager=False))
+
+
 def test_build_config_merges_the_deploy_yaml_over_the_checkpoint(tmp_path):
     """The deploy yaml carries the runtime knobs and the checkpoint carries the
     feature schema and the stats. Both have to land on one config."""
@@ -1312,3 +1320,238 @@ def test_request_denoising_steps_must_be_a_positive_integer(bad):
     with pytest.raises(ValueError, match="num_inference_steps must be a positive integer"):
         _spy_pipeline(spy).forward(_spy_request(bad))
     assert spy.seen == []
+
+
+@pytest.mark.parametrize(
+    "cache_batch,mask_len,latent_rows,error",
+    [(1, 3, 2, "one latent row"), (2, 3, 1, "compatible request prefix"), (1, 2, 1, "compatible request prefix")],
+)
+def test_step_batch_rejects_incompatible_request_shapes(cache_batch, mask_len, latent_rows, error):
+    from vllm_omni.diffusion.models.pi05.pipeline_pi05 import Pi05Pipeline
+    from vllm_omni.diffusion.worker.input_batch import InputBatch
+    from vllm_omni.diffusion.worker.utils import StepRequestState
+    from vllm_omni.inputs.data import OmniDiffusionSamplingParams
+
+    cache = modeling_pi05.Pi05KVCache(
+        num_layers=1,
+        batch_size=cache_batch,
+        num_kv_heads=1,
+        prefix_len=3,
+        suffix_len=4,
+        head_dim=4,
+        dtype=torch.float32,
+        device=torch.device("cpu"),
+    )
+    state = StepRequestState(
+        request_id="invalid",
+        sampling=OmniDiffusionSamplingParams(),
+        latents=torch.zeros(1, 4, 8),
+        timesteps=torch.ones(1),
+        extra={"pi05_kv": cache, "pi05_prefix_mask": torch.ones(1, mask_len, dtype=torch.bool)},
+    )
+    pipeline = Pi05Pipeline.__new__(Pi05Pipeline)
+    torch.nn.Module.__init__(pipeline)
+    pipeline._step_kv_cache = None
+    batch = InputBatch.make_batch([state])
+    batch.latents = torch.zeros(latent_rows, 4, 8)
+    with pytest.raises(ValueError, match=error):
+        pipeline.denoise_step(batch)
+    assert pipeline._step_kv_cache is None
+
+
+@pytest.mark.slow
+def test_step_batch_matches_independent_actions_after_admission_and_reorder(mocker):
+    from vllm_omni.diffusion.models.pi05.pipeline_pi05 import Pi05Pipeline
+    from vllm_omni.diffusion.models.pi05.processor_pi05 import Pi05Processor
+    from vllm_omni.diffusion.worker.input_batch import InputBatch
+    from vllm_omni.diffusion.worker.utils import StepRequestState
+    from vllm_omni.inputs.data import OmniDiffusionSamplingParams
+
+    model = _tiny_pi05_model().eval()
+    generator = torch.Generator().manual_seed(0)
+    # Closed AdaRMS gates make wrong conditioning invisible to action parity.
+    for module in model.modules():
+        if isinstance(module, Pi05AdaRMSNorm) and module.dense is not None:
+            module.dense.weight.data.normal_(std=0.02, generator=generator)
+    model.kv_cache = model.new_kv_cache(1, prefix_len=3 * 256 + 3)
+
+    pipeline = Pi05Pipeline.__new__(Pi05Pipeline)
+    torch.nn.Module.__init__(pipeline)
+    pipeline.model = model
+    pipeline.config = model.config
+    pipeline._step_kv_cache = None
+    pipeline.processor = mocker.create_autospec(Pi05Processor, instance=True)
+    pipeline.processor.build_model_inputs.side_effect = lambda obs: (
+        [torch.full((1, 3, 224, 224), obs["offset"] / 3) for _ in range(3)],
+        [torch.tensor([i <= obs["offset"]]) for i in range(3)],
+        obs["tokens"],
+        obs["mask"],
+    )
+    pipeline.processor.build_model_outputs.side_effect = lambda actions, obs: actions + obs["offset"]
+    encode = mocker.spy(model, "encode_prefix")
+    denoise = mocker.spy(model, "denoise_step")
+    states, expected = {}, {}
+    for index, (name, steps) in enumerate((("a", 2), ("b", 4), ("c", 1))):
+        obs = {
+            "tokens": torch.tensor([[index + 1, 4, 2]]),
+            "mask": torch.tensor([[True, True, index == 0]]),
+            "offset": index,
+        }
+        with torch.inference_mode():
+            expected[name] = (
+                model.sample_actions(
+                    *pipeline.processor.build_model_inputs(obs),
+                    num_steps=steps,
+                    generator=torch.Generator().manual_seed(index),
+                )
+                + index
+            )
+            if index == 0:
+                changed_obs = {**obs, "tokens": obs["tokens"] + 1}
+                changed = model.sample_actions(
+                    *pipeline.processor.build_model_inputs(changed_obs),
+                    num_steps=steps,
+                    generator=torch.Generator().manual_seed(index),
+                )
+                assert not torch.equal(changed, expected[name]), "conditioning must affect the fixed-noise chunk"
+        states[name] = StepRequestState(
+            request_id=name,
+            sampling=OmniDiffusionSamplingParams(
+                num_inference_steps=steps, generator=torch.Generator().manual_seed(index), extra_args={"robot_obs": obs}
+            ),
+        )
+    encode.reset_mock()
+    denoise.reset_mock()
+    full_cache = model.kv_cache
+    assert isinstance(full_cache, modeling_pi05.Pi05KVCache)
+    full_cache_snapshot = (full_cache.key.clone(), full_cache.value.clone())
+    new_cache = model.new_kv_cache
+
+    def poison_suffix(cache):
+        with torch.inference_mode():
+            cache.key[:, :, :, cache.prefix_len :].fill_(float("nan"))
+            cache.value[:, :, :, cache.prefix_len :].fill_(float("nan"))
+
+    def allocate_poisoned_cache(*args, **kwargs):
+        cache = new_cache(*args, **kwargs)
+        poison_suffix(cache)
+        return cache
+
+    mocker.patch.object(model, "new_kv_cache", side_effect=allocate_poisoned_cache)
+    snapshots = {}
+    cached = None
+    for names in (("a",), ("b", "a"), ("c", "b"), ("b",), ("b",)):
+        current = [states[name] for name in names]
+        for state in current:
+            if state.latents is None:
+                pipeline.prepare_encode(state)
+                cache = state.extra["pi05_kv"]
+                snapshots[state.request_id] = (
+                    cache.key[:, :, :, : cache.prefix_len].clone(),
+                    cache.value[:, :, :, : cache.prefix_len].clone(),
+                    state.extra["pi05_prefix_mask"].clone(),
+                )
+        previous_workspace = pipeline._step_kv_cache
+        if previous_workspace is not None:
+            poison_suffix(previous_workspace)
+        cached = InputBatch.make_batch(current, cached_batch=cached)
+        velocity = pipeline.denoise_step(cached)
+        workspace = pipeline._step_kv_cache
+        assert isinstance(workspace, modeling_pi05.Pi05KVCache)
+        assert workspace.batch_size == len(current)
+        if previous_workspace is not None:
+            assert (workspace is previous_workspace) == (previous_workspace.batch_size == len(current))
+        assert torch.isfinite(workspace.key).all() and torch.isfinite(workspace.value).all()
+        assert torch.equal(full_cache.key, full_cache_snapshot[0])
+        assert torch.equal(full_cache.value, full_cache_snapshot[1])
+        for name, (key, value, mask) in snapshots.items():
+            state = states[name]
+            cache = state.extra["pi05_kv"]
+            assert torch.equal(cache.key[:, :, :, : cache.prefix_len], key)
+            assert torch.equal(cache.value[:, :, :, : cache.prefix_len], value)
+            assert torch.equal(state.extra["pi05_prefix_mask"], mask)
+            for other in (full_cache, workspace):
+                assert cache.key.untyped_storage().data_ptr() != other.key.untyped_storage().data_ptr()
+                assert cache.value.untyped_storage().data_ptr() != other.value.untyped_storage().data_ptr()
+        for row, state in enumerate(current):
+            key, value, _ = snapshots[state.request_id]
+            assert torch.equal(workspace.key[:, row : row + 1, :, : workspace.prefix_len], key)
+            assert torch.equal(workspace.value[:, row : row + 1, :, : workspace.prefix_len], value)
+            pipeline.step_scheduler(state, velocity[row : row + 1])
+            if state.denoise_completed:
+                torch.testing.assert_close(
+                    pipeline.post_decode(state).output["actions"], expected[state.request_id], atol=1e-4, rtol=1e-5
+                )
+    assert encode.call_count == 3
+    assert denoise.call_count == 5
+    assert [call.args[2].shape[0] for call in denoise.call_args_list] == [1, 2, 2, 1, 1]
+
+
+@pytest.mark.parametrize("steps", [None, 1, 3, 10])
+def test_step_admission_resolves_default_and_warmup(steps):
+    from vllm_omni.diffusion.models.pi05.pipeline_pi05 import _pi05_pre_process
+    from vllm_omni.diffusion.request import OmniDiffusionRequest
+    from vllm_omni.inputs.data import OmniDiffusionSamplingParams
+
+    request = OmniDiffusionRequest(
+        request_id="obs",
+        prompt="obs",
+        sampling_params=OmniDiffusionSamplingParams(
+            num_inference_steps=steps, extra_args={"robot_obs": {"state": [0]}}
+        ),
+    )
+    _pi05_pre_process(request, default_steps=7, step_execution=True)
+    assert request.sampling_params.num_inference_steps == (7 if steps is None else steps)
+    assert request.use_step_execution
+    warmup = OmniDiffusionRequest(
+        request_id="warmup", prompt="dummy run", sampling_params=OmniDiffusionSamplingParams()
+    )
+    _pi05_pre_process(warmup, default_steps=7, step_execution=True)
+    assert warmup.use_step_execution is False
+
+
+@pytest.mark.parametrize("bad", [0, -1, True, 2.5, "4"])
+def test_step_admission_rejects_invalid_steps(bad):
+    from vllm_omni.diffusion.models.pi05.pipeline_pi05 import _pi05_pre_process
+    from vllm_omni.diffusion.request import OmniDiffusionRequest
+    from vllm_omni.inputs.data import OmniDiffusionSamplingParams
+
+    request = OmniDiffusionRequest(
+        request_id="invalid",
+        prompt="test",
+        sampling_params=OmniDiffusionSamplingParams(num_inference_steps=bad, extra_args={"robot_obs": {"state": 0}}),
+    )
+    with pytest.raises(ValueError, match="positive integer"):
+        _pi05_pre_process(request, default_steps=10, step_execution=True)
+
+
+@pytest.mark.parametrize("field", ["timesteps", "sigmas"])
+def test_step_admission_rejects_custom_schedule(field):
+    from vllm_omni.diffusion.models.pi05.pipeline_pi05 import _pi05_pre_process
+    from vllm_omni.diffusion.request import OmniDiffusionRequest
+    from vllm_omni.inputs.data import OmniDiffusionSamplingParams
+
+    params = OmniDiffusionSamplingParams(num_inference_steps=2, extra_args={"robot_obs": {"state": 0}})
+    setattr(params, field, [1.0, 0.5])
+    request = OmniDiffusionRequest(request_id="custom", prompt="test", sampling_params=params)
+    with pytest.raises(ValueError, match="timesteps/sigmas"):
+        _pi05_pre_process(request, default_steps=10, step_execution=True)
+
+
+def test_step_warmup_uses_request_batch_forward():
+    from vllm_omni.diffusion.models.pi05.pipeline_pi05 import _pi05_pre_process
+    from vllm_omni.diffusion.request import OmniDiffusionRequest
+    from vllm_omni.diffusion.worker.request_batch import DiffusionRequestBatch
+    from vllm_omni.inputs.data import OmniDiffusionSamplingParams
+
+    request = OmniDiffusionRequest(
+        request_id="dummy_req_id",
+        prompt={"prompt": "dummy run"},
+        sampling_params=OmniDiffusionSamplingParams(num_inference_steps=1),
+    )
+    _pi05_pre_process(request, default_steps=10, step_execution=True)
+    assert not request.use_step_execution
+    pipeline = _spy_pipeline(_SpyModel())
+    output = pipeline.forward(DiffusionRequestBatch([request]))
+    assert output.output["actions"].shape == (50, 32)
+    assert not output.output["actions"].any()
