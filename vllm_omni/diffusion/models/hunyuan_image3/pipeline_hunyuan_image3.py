@@ -1109,6 +1109,19 @@ class HunyuanImage3Pipeline(
 
         return t, latents
 
+    def _advance_cond_image_rng(
+        self,
+        batch_cond_image_info_list: list[list[JointImageInfo]],
+        generator: torch.Generator | list[torch.Generator] | None = None,
+    ) -> None:
+        """Preserve conditional-image draws before initial noise on a KV hit."""
+        for batch_idx, cond_image_info_list in enumerate(batch_cond_image_info_list):
+            cond_generator = generator[batch_idx] if isinstance(generator, list) else generator
+            for image_info in cond_image_info_list:
+                image = image_info.vae_image_info.image_tensor
+                with torch.autocast(device_type=self.model.device.type, dtype=torch.float16, enabled=True):
+                    self.vae.advance_posterior_rng(image.shape, cond_generator, self.device)
+
     def _encode_cond_image(
         self,
         batch_cond_image_info_list: list[list[JointImageInfo]],
@@ -1323,7 +1336,7 @@ class HunyuanImage3Pipeline(
                 )
 
         # 4. Encode conditional images
-        # Skip encoding if AR KV reuse is enabled
+        # KV reuse skips encoding, but must retain its draws before initial noise.
         has_ar_kv = kwargs.get("ar_kv_data") or request_layout_utils.native_kv_covers_cond_images(
             output, kwargs.get("kv_computed_tokens", ())
         )
@@ -1343,6 +1356,8 @@ class HunyuanImage3Pipeline(
                 vit_kwargs["spatial_shapes"] = vit_kwargs["spatial_shapes"] * cfg_factor[mode]
                 vit_kwargs["attention_mask"] = vit_kwargs["attention_mask"] * cfg_factor[mode]
         else:
+            if has_ar_kv and batch_cond_image_info is not None:
+                self._advance_cond_image_rng(batch_cond_image_info, generator=generator)
             cond_vae_images, cond_timestep, cond_vit_images = None, None, None
             vit_kwargs = None
 

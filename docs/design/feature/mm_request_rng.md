@@ -46,16 +46,17 @@ at startup; use `model_runner: v1`. Execution is serialized eager encoding;
 encoder CUDA graph capture is outside scope. Seed zero enables request sampling.
 Seedless AR retains global-RNG sampling and image-based cache reuse.
 
-## Separate DiT questions
+## DiT replay and integration boundaries
 
 The DiT posterior path draws conditional images in reference order, then initial
 noise and later draws. CFG copies conditioning without extra posterior draws.
-Its generator is independent of AR's. Skipping conditional encoding for AR-KV
-imports or native prefix hits currently shifts the noise stream; this PR does
-not fix that. A separate replay/checkpoint fix must match the actual DiT posterior
-shape/dtype/device, including autocast; tensor-returning VAE backends differ.
-Suggested validation compares initial noise and final RNG state across miss,
-hit and import paths, including unequal/repeated references and supported CFG modes.
+Its generator is independent of AR's. When AR-KV imports or native prefix hits
+skip conditional encoding, the pipeline replays each reference's posterior draw
+before initial noise, without running the VAE encoder. Replay matches the
+posterior shape/dtype/device, including autocast and distributed tiling's output
+cast. It advances the supplied generator from its current state, preserving
+already-consumed draws. Partial hits that still need encoding use the normal
+sampling path.
 
 DiT identity uses an explicit generator's state ahead of a numeric seed, falling
 back to request ID without either. AR's seedless reuse policy differs. A shared
@@ -74,7 +75,15 @@ on CUDA at 1024x1024, 768x1024 and 1024x768 with native 384-pixel spatial tiling
 They check posterior specs, samples and RNG state; CUDA request tests also cover FP16.
 No pretrained quality, distributed TP, NPU hardware or AR-to-DiT E2E claim is made.
 
+DiT tests compare initial noise and generator states across misses, partial/full
+hits and imports, including unequal/repeated references, CFG and explicit
+CPU/device generators. They use a reduced random-weight encoder to check replay
+under autocast and local/distributed tiling. Tile communication is replaced in
+the distributed test; multi-device collectives are not exercised.
+
 ```bash
 python -m pytest tests/inputs/test_mm_rng.py tests/model_executor/models/test_hunyuan_request_rng.py tests/worker/test_mm_request_rng_wiring.py -m 'core_model and cpu' -q
 python -m pytest tests/model_executor/models/test_hunyuan_request_rng.py -m 'core_model and cuda and L4' --run-level=core_model -q
+python -m pytest tests/diffusion/models/hunyuan_image3/test_hunyuan_image3_cache_rng.py -m 'core_model and cpu' -q
+python -m pytest tests/diffusion/models/hunyuan_image3/test_hunyuan_image3_cache_rng.py -m 'core_model and cuda and L4' --run-level=core_model -q
 ```

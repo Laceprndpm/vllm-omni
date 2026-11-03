@@ -700,6 +700,7 @@ def test_prepared_model_inputs_match_local_tokenization(
         )
 
     pipeline._encode_cond_image = fake_encode_cond_image
+    pipeline._advance_cond_image_rng = lambda *args, **kwargs: None
 
     def fake_build_batch_2d_rope(*, image_infos, seq_len, **_kwargs):
         geometry_sum = sum(

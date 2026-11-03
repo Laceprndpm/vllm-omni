@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
 
 from typing import Any
 
 import torch
+from diffusers.utils.torch_utils import randn_tensor
 from vllm.logger import init_logger
 
 from vllm_omni.diffusion.distributed.autoencoders.distributed_vae_executor import (
@@ -38,13 +39,46 @@ class DistributedAutoencoderKLHunyuan(AutoencoderKLConv3D, DistributedVaeMixin):
     def use_tiling(self, use_tiling: bool) -> None:
         self.use_spatial_tiling = use_tiling
 
+    def advance_posterior_rng(
+        self,
+        image_shape: tuple[int, ...],
+        generator: torch.Generator | None,
+        device: torch.device,
+    ) -> None:
+        """Consume an image posterior's draw without running the encoder.
+
+        Match DiagonalGaussianDistribution.sample, including autocast and the
+        distributed tile executor's output cast. HunyuanImage3 conditions on
+        single-frame images, expanded to ffactor_temporal by encode().
+        """
+        if len(image_shape) not in (3, 4, 5) or (len(image_shape) == 5 and image_shape[2] != 1):
+            raise ValueError(f"Expected a single-frame image, got shape {image_shape}.")
+        batch_size = 1 if len(image_shape) == 3 else image_shape[0]
+        height, width = image_shape[-2:]
+        shape = (
+            batch_size,
+            self.config.latent_channels,
+            1,
+            height // self.ffactor_spatial,
+            width // self.ffactor_spatial,
+        )
+        dtype = torch.get_autocast_dtype(device.type) if torch.is_autocast_enabled(device.type) else self.dtype
+        if (
+            self.use_spatial_tiling
+            and (height > self.tile_sample_min_size or width > self.tile_sample_min_size)
+            and self.is_distributed_enabled()
+        ):
+            # encode_tile_split sets GridSpec.output_dtype to the model dtype.
+            dtype = self.dtype
+        randn_tensor(shape, generator=generator, device=device, dtype=dtype)
+
     def tile_split(self, z: torch.Tensor) -> tuple[list[TileTask], GridSpec]:
         _, _, _, height, width = z.shape
         overlap_size = int(self.tile_latent_min_size * (1 - self.tile_overlap_factor))
         blend_extent = int(self.tile_sample_min_size * self.tile_overlap_factor)
         row_limit = int(self.tile_sample_min_size - blend_extent)
 
-        tiletask_list = []
+        tiletask_list: list[TileTask] = []
         for i in range(0, height, overlap_size):
             for j in range(0, width, overlap_size):
                 tile = z[:, :, :, i : i + self.tile_latent_min_size, j : j + self.tile_latent_min_size]
@@ -89,7 +123,7 @@ class DistributedAutoencoderKLHunyuan(AutoencoderKLConv3D, DistributedVaeMixin):
         blend_extent = int(self.tile_latent_min_size * self.tile_overlap_factor)
         row_limit = int(self.tile_latent_min_size - blend_extent)
 
-        tiletask_list = []
+        tiletask_list: list[TileTask] = []
         for i in range(0, height, overlap_size):
             for j in range(0, width, overlap_size):
                 tile = x[:, :, :, i : i + self.tile_sample_min_size, j : j + self.tile_sample_min_size]
