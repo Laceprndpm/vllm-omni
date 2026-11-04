@@ -1,0 +1,37 @@
+{
+  "all_python_source_files_checked": 2093,
+  "source_changes": [
+    "diffusion/cache/cachedit/__init__.py",
+    "diffusion/cache/cachedit/backend.py",
+    "diffusion/models/longcat_image/pipeline_longcat_image_edit.py"
+  ],
+  "variants": {
+    "reference": {
+      "primary_cases": 24,
+      "full_step_repeats": 3,
+      "warmups": 4,
+      "image_sha256_checks": 31,
+      "real_forwards_per_primary": 50,
+      "logical_cache_steps_per_primary": null
+    },
+    "baseline": {
+      "primary_cases": 24,
+      "full_step_repeats": 3,
+      "warmups": 4,
+      "image_sha256_checks": 31,
+      "real_forwards_per_primary": 50,
+      "logical_cache_steps_per_primary": 25
+    },
+    "fixed": {
+      "primary_cases": 24,
+      "full_step_repeats": 3,
+      "warmups": 4,
+      "image_sha256_checks": 31,
+      "real_forwards_per_primary": 50,
+      "logical_cache_steps_per_primary": 50
+    }
+  },
+  "pixel_identical_repeats": 9,
+  "plan_sha256": "a606a7ae68c78e471183b0a9ab529b373852b50fb7ff355c73181edb4571f867",
+  "fix_patch_sha256": "4b054d3e195cf6f989afebfe045c85b0af67795acbc2e42a5b7b8ea48e134d31"
+}

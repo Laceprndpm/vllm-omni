@@ -1,0 +1,130 @@
+{
+  "frozen_at_utc": "2026-11-04T12:39:00.617331+00:00",
+  "purpose": "Test whether the request-specific CFG accounting fix improves SSIM against an uncached baseline; retain every gain and regression.",
+  "base_commit": "fc7ea43775b840ecc2b79addec9cd138065db5f0",
+  "fix_patch_sha256": "4b054d3e195cf6f989afebfe045c85b0af67795acbc2e42a5b7b8ea48e134d31",
+  "model_revision": "7b54ef423aa7854be7861600024be5c56ab7875a",
+  "inputs": {
+    "cat": {
+      "path": "inputs/cat.png",
+      "sha256": "a93106438ce904d5bf3f8d72e23d2cf7bf5fbde400bbc4eb4076868ef98451e0",
+      "original_size": [
+        1024,
+        1024
+      ],
+      "provenance": "meituan-longcat/LongCat-Image-Edit@7b54ef423aa7854be7861600024be5c56ab7875a/assets/test.png"
+    },
+    "dog": {
+      "path": "inputs/dog.png",
+      "sha256": "b13355115f5e5da9e3d146c4ad942eeba4e1c35005f786f44c0ea07f0298d024",
+      "original_size": [
+        1024,
+        1024
+      ],
+      "provenance": "vllm-omni@fc7ea4377/tests/assets/qwen_image_edit/qwen_image_edit_2511_test2.png"
+    },
+    "brooch": {
+      "path": "inputs/brooch.png",
+      "sha256": "41ed65bdb9fefb6677dcb73f83f0de7d866ac2be4596b84bc7fb5757211de2f0",
+      "original_size": [
+        1280,
+        720
+      ],
+      "provenance": "vllm-omni@fc7ea4377/tests/assets/hunyuan_image3/hunyuan_image_instruct_ref.png"
+    }
+  },
+  "tasks": [
+    {
+      "id": "cat_to_dog",
+      "input": "cat",
+      "prompt": "Change the cat into a dog."
+    },
+    {
+      "id": "cat_blue_sofa",
+      "input": "cat",
+      "prompt": "Change the sofa upholstery to deep blue velvet. Keep the cat and the rest of the scene unchanged."
+    },
+    {
+      "id": "dog_bandana",
+      "input": "dog",
+      "prompt": "Add a red bandana around the dog's neck. Keep the dog's appearance and the background unchanged."
+    },
+    {
+      "id": "dog_snow",
+      "input": "dog",
+      "prompt": "Replace the background with a snowy forest. Keep the dog unchanged."
+    },
+    {
+      "id": "brooch_green",
+      "input": "brooch",
+      "prompt": "Change the blue enamel sections of the brooch to emerald green. Keep the white enamel, silver border, and fabric background unchanged."
+    },
+    {
+      "id": "brooch_table",
+      "input": "brooch",
+      "prompt": "Place the brooch on a dark wooden table instead of the fabric. Preserve the brooch's shape and colors."
+    }
+  ],
+  "seeds": [
+    7,
+    42,
+    123,
+    2026
+  ],
+  "num_inference_steps": 50,
+  "width": 1024,
+  "height": 1024,
+  "guidance_scale": 1.0,
+  "negative_prompt": "",
+  "enforce_eager": true,
+  "cache_config": {},
+  "variants": {
+    "reference": {
+      "source": "baseline-src",
+      "cache_backend": null
+    },
+    "baseline": {
+      "source": "baseline-src",
+      "cache_backend": "cache_dit"
+    },
+    "fixed": {
+      "source": "../vllm-omni",
+      "cache_backend": "cache_dit"
+    }
+  },
+  "warmup": "Two-step sequential CFG request before each seed round; excluded from statistics.",
+  "repeats": [
+    "cat_to_dog_s7",
+    "dog_bandana_s7",
+    "brooch_green_s7"
+  ],
+  "repeat_policy": "Repeat at the end of each variant. These repeats test pixel repeatability and are excluded from the 24 primary pairs.",
+  "primary_metric": {
+    "library": "skimage.metrics.structural_similarity",
+    "channel_axis": 2,
+    "data_range": 255,
+    "gaussian_weights": true,
+    "sigma": 1.5,
+    "use_sample_covariance": false
+  },
+  "secondary_metric": "Repository compute_image_ssim_psnr (TorchMetrics) reported separately; same PNGs.",
+  "analysis_plan": [
+    "All 24 paired SSIM differences, mean, median, range, improvement/tie/regression counts.",
+    "Means by seed round, input image, and editing task.",
+    "Seed-round cluster bootstrap for mean delta; exploratory interval conditional on selected tasks, only four seeds.",
+    "Worst regression retained and visually inspected.",
+    "Primary endpoint is average delta; do not tune prompts, seeds, cache parameters, or source after seeing scores."
+  ],
+  "source_file_sha256": {
+    "baseline": {
+      "vllm_omni/diffusion/cache/cachedit/backend.py": "6f277875ddc4694bf0d548ecf0acbbfb97b5c696e6bdad56fc0033d05975f7da",
+      "vllm_omni/diffusion/cache/cachedit/__init__.py": "a66e1d12a1a71b3985b44e2f9fdc58f5f007a7ec90e52eea7c999d8ec046a0a6",
+      "vllm_omni/diffusion/models/longcat_image/pipeline_longcat_image_edit.py": "ff882b6aff82fb194bbb4ea4ab71e595f11eccd319bd24f6748c6da717bc6030"
+    },
+    "fixed": {
+      "vllm_omni/diffusion/cache/cachedit/backend.py": "d0a01f1dbab696874bcb63149c223106208b7f2e19a0c361e29de197e9867734",
+      "vllm_omni/diffusion/cache/cachedit/__init__.py": "3ad9e92ca4d8639bd78f4170b8c75343b18a3d4dddf86ba38c648c9a80cfa6b3",
+      "vllm_omni/diffusion/models/longcat_image/pipeline_longcat_image_edit.py": "ca19430acb287231cf2709986c2ce08f09457297d2c1aff5bd735986b83199f4"
+    }
+  }
+}

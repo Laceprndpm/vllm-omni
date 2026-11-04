@@ -1,0 +1,9 @@
+{
+  "submitted_commit": "b301911953f45ce607dcf66b1300b554301c89bd",
+  "runtime_file_sha256": {
+    "vllm_omni/diffusion/cache/cachedit/backend.py": "d0a01f1dbab696874bcb63149c223106208b7f2e19a0c361e29de197e9867734",
+    "vllm_omni/diffusion/cache/cachedit/__init__.py": "3ad9e92ca4d8639bd78f4170b8c75343b18a3d4dddf86ba38c648c9a80cfa6b3",
+    "vllm_omni/diffusion/models/longcat_image/pipeline_longcat_image_edit.py": "ca19430acb287231cf2709986c2ce08f09457297d2c1aff5bd735986b83199f4"
+  },
+  "note": "Runtime files match the measured patch byte-for-byte. After the SSIM study, only the unit-test request fixture was switched to OmniDiffusionRequest with seed=0; the 95-test suite was rerun."
+}

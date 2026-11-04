@@ -1,0 +1,10 @@
+Run mypy for Python 3.10.................................................Failed
+- hook id: mypy-3.10
+- exit code: 1
+
+vllm_omni/diffusion/cache/cachedit/backend.py:362: error: "SupportsComponentDiscovery" has no attribute "_cache_dit_targets"  [attr-defined]
+vllm_omni/diffusion/cache/cachedit/backend.py:365: error: "SupportsComponentDiscovery" has no attribute "_cache_dit_one_call_per_cfg_rank"  [attr-defined]
+vllm_omni/diffusion/cache/cachedit/backend.py:389: error: "SupportsComponentDiscovery" has no attribute "_cache_dit_one_call_per_cfg_rank"  [attr-defined]
+Found 3 errors in 1 file (checked 2 source files)
+$ mypy --python-version 3.10
+

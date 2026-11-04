@@ -1,0 +1,254 @@
+{
+  "reference": {
+    "variant": "reference",
+    "base_commit": "fc7ea43775b840ecc2b79addec9cd138065db5f0",
+    "fixed_patch_sha256": null,
+    "plan_sha256": "a606a7ae68c78e471183b0a9ab529b373852b50fb7ff355c73181edb4571f867",
+    "versions": {
+      "vllm": "0.33.0",
+      "torch": "2.14.0",
+      "diffusers": "0.40.0",
+      "transformers": "5.19.0",
+      "cache-dit": "1.5.0",
+      "torchvision": "0.29.0",
+      "numpy": "2.3.5",
+      "scikit-image": "0.26.0",
+      "torchmetrics": "1.9.0",
+      "matplotlib": "3.11.2"
+    },
+    "torch_cuda": "13.0",
+    "cudnn": 92501,
+    "gpu": "NVIDIA A800 80GB PCIe, 580.65.06, 81920 MiB",
+    "model_revision": "7b54ef423aa7854be7861600024be5c56ab7875a",
+    "cache_backend": null,
+    "cache_config": {},
+    "enforce_eager": true,
+    "input_conversion": "PIL RGB, then normal pipeline image preprocessing at requested 1024x1024. No generated image resizing.",
+    "omp_num_threads": "8",
+    "source_file_sha256": {
+      "vllm_omni/diffusion/cache/cachedit/backend.py": "6f277875ddc4694bf0d548ecf0acbbfb97b5c696e6bdad56fc0033d05975f7da",
+      "vllm_omni/diffusion/cache/cachedit/__init__.py": "a66e1d12a1a71b3985b44e2f9fdc58f5f007a7ec90e52eea7c999d8ec046a0a6",
+      "vllm_omni/diffusion/models/longcat_image/pipeline_longcat_image_edit.py": "ff882b6aff82fb194bbb4ea4ab71e595f11eccd319bd24f6748c6da717bc6030"
+    },
+    "worker_runtime": {
+      "pipeline_source_sha256": "ff882b6aff82fb194bbb4ea4ab71e595f11eccd319bd24f6748c6da717bc6030",
+      "transformer_attention_implementations": [],
+      "scheduler_class": "FlowMatchEulerDiscreteScheduler",
+      "scheduler_config": {
+        "num_train_timesteps": 1000,
+        "shift": 3.0,
+        "use_dynamic_shifting": true,
+        "base_shift": 0.5,
+        "max_shift": 1.15,
+        "base_image_seq_len": 256,
+        "max_image_seq_len": 4096,
+        "invert_sigmas": false,
+        "shift_terminal": null,
+        "use_karras_sigmas": false,
+        "use_exponential_sigmas": false,
+        "use_beta_sigmas": false,
+        "time_shift_type": "exponential",
+        "stochastic_sampling": false,
+        "_use_default_values": [
+          "invert_sigmas",
+          "use_beta_sigmas",
+          "use_exponential_sigmas",
+          "time_shift_type",
+          "stochastic_sampling",
+          "use_karras_sigmas",
+          "shift_terminal"
+        ],
+        "_class_name": "FlowMatchEulerDiscreteScheduler",
+        "_diffusers_version": "0.30.0.dev0"
+      },
+      "matmul_allow_tf32": false,
+      "cudnn_allow_tf32": true,
+      "cudnn_version": 92501,
+      "components": {
+        "transformer": {
+          "class": "vllm_omni.diffusion.models.longcat_image.longcat_image_transformer.LongCatImageTransformer2DModel",
+          "source_sha256": "04e942f96d615772fa6cb7bee587619b735c7b2de2c44f6fe868f8e6c6d65b43",
+          "dtype": "torch.bfloat16"
+        },
+        "text_encoder": {
+          "class": "transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration",
+          "source_sha256": "c64c794741011b27c773a1e2299d5fc2abd1e49e79f8d11ce87b2b308e9bf205",
+          "dtype": "torch.bfloat16"
+        },
+        "vae": {
+          "class": "diffusers.models.autoencoders.autoencoder_kl.AutoencoderKL",
+          "source_sha256": "091d72ea9ae2f45f465e70f05142e04850d1153052dca520291ceb707bda8c98",
+          "dtype": "torch.bfloat16"
+        }
+      }
+    }
+  },
+  "baseline": {
+    "variant": "baseline",
+    "base_commit": "fc7ea43775b840ecc2b79addec9cd138065db5f0",
+    "fixed_patch_sha256": null,
+    "plan_sha256": "a606a7ae68c78e471183b0a9ab529b373852b50fb7ff355c73181edb4571f867",
+    "versions": {
+      "vllm": "0.33.0",
+      "torch": "2.14.0",
+      "diffusers": "0.40.0",
+      "transformers": "5.19.0",
+      "cache-dit": "1.5.0",
+      "torchvision": "0.29.0",
+      "numpy": "2.3.5",
+      "scikit-image": "0.26.0",
+      "torchmetrics": "1.9.0",
+      "matplotlib": "3.11.2"
+    },
+    "torch_cuda": "13.0",
+    "cudnn": 92501,
+    "gpu": "NVIDIA A800 80GB PCIe, 580.65.06, 81920 MiB",
+    "model_revision": "7b54ef423aa7854be7861600024be5c56ab7875a",
+    "cache_backend": "cache_dit",
+    "cache_config": {},
+    "enforce_eager": true,
+    "input_conversion": "PIL RGB, then normal pipeline image preprocessing at requested 1024x1024. No generated image resizing.",
+    "omp_num_threads": "8",
+    "source_file_sha256": {
+      "vllm_omni/diffusion/cache/cachedit/backend.py": "6f277875ddc4694bf0d548ecf0acbbfb97b5c696e6bdad56fc0033d05975f7da",
+      "vllm_omni/diffusion/cache/cachedit/__init__.py": "a66e1d12a1a71b3985b44e2f9fdc58f5f007a7ec90e52eea7c999d8ec046a0a6",
+      "vllm_omni/diffusion/models/longcat_image/pipeline_longcat_image_edit.py": "ff882b6aff82fb194bbb4ea4ab71e595f11eccd319bd24f6748c6da717bc6030"
+    },
+    "worker_runtime": {
+      "pipeline_source_sha256": "ff882b6aff82fb194bbb4ea4ab71e595f11eccd319bd24f6748c6da717bc6030",
+      "transformer_attention_implementations": [],
+      "scheduler_class": "FlowMatchEulerDiscreteScheduler",
+      "scheduler_config": {
+        "num_train_timesteps": 1000,
+        "shift": 3.0,
+        "use_dynamic_shifting": true,
+        "base_shift": 0.5,
+        "max_shift": 1.15,
+        "base_image_seq_len": 256,
+        "max_image_seq_len": 4096,
+        "invert_sigmas": false,
+        "shift_terminal": null,
+        "use_karras_sigmas": false,
+        "use_exponential_sigmas": false,
+        "use_beta_sigmas": false,
+        "time_shift_type": "exponential",
+        "stochastic_sampling": false,
+        "_use_default_values": [
+          "invert_sigmas",
+          "use_karras_sigmas",
+          "time_shift_type",
+          "use_beta_sigmas",
+          "stochastic_sampling",
+          "shift_terminal",
+          "use_exponential_sigmas"
+        ],
+        "_class_name": "FlowMatchEulerDiscreteScheduler",
+        "_diffusers_version": "0.30.0.dev0"
+      },
+      "matmul_allow_tf32": false,
+      "cudnn_allow_tf32": true,
+      "cudnn_version": 92501,
+      "components": {
+        "transformer": {
+          "class": "vllm_omni.diffusion.models.longcat_image.longcat_image_transformer.LongCatImageTransformer2DModel",
+          "source_sha256": "04e942f96d615772fa6cb7bee587619b735c7b2de2c44f6fe868f8e6c6d65b43",
+          "dtype": "torch.bfloat16"
+        },
+        "text_encoder": {
+          "class": "transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration",
+          "source_sha256": "c64c794741011b27c773a1e2299d5fc2abd1e49e79f8d11ce87b2b308e9bf205",
+          "dtype": "torch.bfloat16"
+        },
+        "vae": {
+          "class": "diffusers.models.autoencoders.autoencoder_kl.AutoencoderKL",
+          "source_sha256": "091d72ea9ae2f45f465e70f05142e04850d1153052dca520291ceb707bda8c98",
+          "dtype": "torch.bfloat16"
+        }
+      }
+    }
+  },
+  "fixed": {
+    "variant": "fixed",
+    "base_commit": "fc7ea43775b840ecc2b79addec9cd138065db5f0",
+    "fixed_patch_sha256": "4b054d3e195cf6f989afebfe045c85b0af67795acbc2e42a5b7b8ea48e134d31",
+    "plan_sha256": "a606a7ae68c78e471183b0a9ab529b373852b50fb7ff355c73181edb4571f867",
+    "versions": {
+      "vllm": "0.33.0",
+      "torch": "2.14.0",
+      "diffusers": "0.40.0",
+      "transformers": "5.19.0",
+      "cache-dit": "1.5.0",
+      "torchvision": "0.29.0",
+      "numpy": "2.3.5",
+      "scikit-image": "0.26.0",
+      "torchmetrics": "1.9.0",
+      "matplotlib": "3.11.2"
+    },
+    "torch_cuda": "13.0",
+    "cudnn": 92501,
+    "gpu": "NVIDIA A800 80GB PCIe, 580.65.06, 81920 MiB",
+    "model_revision": "7b54ef423aa7854be7861600024be5c56ab7875a",
+    "cache_backend": "cache_dit",
+    "cache_config": {},
+    "enforce_eager": true,
+    "input_conversion": "PIL RGB, then normal pipeline image preprocessing at requested 1024x1024. No generated image resizing.",
+    "omp_num_threads": "8",
+    "source_file_sha256": {
+      "vllm_omni/diffusion/cache/cachedit/backend.py": "d0a01f1dbab696874bcb63149c223106208b7f2e19a0c361e29de197e9867734",
+      "vllm_omni/diffusion/cache/cachedit/__init__.py": "3ad9e92ca4d8639bd78f4170b8c75343b18a3d4dddf86ba38c648c9a80cfa6b3",
+      "vllm_omni/diffusion/models/longcat_image/pipeline_longcat_image_edit.py": "ca19430acb287231cf2709986c2ce08f09457297d2c1aff5bd735986b83199f4"
+    },
+    "worker_runtime": {
+      "pipeline_source_sha256": "ca19430acb287231cf2709986c2ce08f09457297d2c1aff5bd735986b83199f4",
+      "transformer_attention_implementations": [],
+      "scheduler_class": "FlowMatchEulerDiscreteScheduler",
+      "scheduler_config": {
+        "num_train_timesteps": 1000,
+        "shift": 3.0,
+        "use_dynamic_shifting": true,
+        "base_shift": 0.5,
+        "max_shift": 1.15,
+        "base_image_seq_len": 256,
+        "max_image_seq_len": 4096,
+        "invert_sigmas": false,
+        "shift_terminal": null,
+        "use_karras_sigmas": false,
+        "use_exponential_sigmas": false,
+        "use_beta_sigmas": false,
+        "time_shift_type": "exponential",
+        "stochastic_sampling": false,
+        "_use_default_values": [
+          "shift_terminal",
+          "time_shift_type",
+          "use_exponential_sigmas",
+          "use_beta_sigmas",
+          "use_karras_sigmas",
+          "invert_sigmas",
+          "stochastic_sampling"
+        ],
+        "_class_name": "FlowMatchEulerDiscreteScheduler",
+        "_diffusers_version": "0.30.0.dev0"
+      },
+      "matmul_allow_tf32": false,
+      "cudnn_allow_tf32": true,
+      "cudnn_version": 92501,
+      "components": {
+        "transformer": {
+          "class": "vllm_omni.diffusion.models.longcat_image.longcat_image_transformer.LongCatImageTransformer2DModel",
+          "source_sha256": "04e942f96d615772fa6cb7bee587619b735c7b2de2c44f6fe868f8e6c6d65b43",
+          "dtype": "torch.bfloat16"
+        },
+        "text_encoder": {
+          "class": "transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration",
+          "source_sha256": "c64c794741011b27c773a1e2299d5fc2abd1e49e79f8d11ce87b2b308e9bf205",
+          "dtype": "torch.bfloat16"
+        },
+        "vae": {
+          "class": "diffusers.models.autoencoders.autoencoder_kl.AutoencoderKL",
+          "source_sha256": "091d72ea9ae2f45f465e70f05142e04850d1153052dca520291ceb707bda8c98",
+          "dtype": "torch.bfloat16"
+        }
+      }
+    }
+  }
+}

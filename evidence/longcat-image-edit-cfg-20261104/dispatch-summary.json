@@ -1,0 +1,183 @@
+{
+  "scope": "One separate two-step cat-to-dog request per variant, seed 7, guidance 1.0, 1024x1024; traces excluded from primary SSIM and timing data.",
+  "variants": {
+    "reference": {
+      "attention_components": {
+        "transformer": {
+          "implementations": [
+            "backend:FLASH_ATTN",
+            "impl:vllm_omni.diffusion.attention.backends.flash_attn.FlashAttentionImpl"
+          ],
+          "config_attn_implementation": null
+        },
+        "text_encoder": {
+          "implementations": [],
+          "config_attn_implementation": "sdpa"
+        },
+        "vae": {
+          "implementations": [
+            "processor:diffusers.models.attention_processor.AttnProcessor2_0"
+          ],
+          "config_attn_implementation": null
+        }
+      },
+      "sdpa_enabled": {
+        "flash": true,
+        "mem_efficient": true,
+        "math": true,
+        "cudnn": false
+      },
+      "component_attention_operators": {
+        "probe::text_encoder": {
+          "aten::scaled_dot_product_attention": 732,
+          "aten::_scaled_dot_product_flash_attention": 704,
+          "aten::_flash_attention_forward": 704,
+          "aten::_scaled_dot_product_efficient_attention": 28,
+          "aten::_efficient_attention_forward": 28
+        },
+        "probe::vae_encode": {
+          "aten::scaled_dot_product_attention": 1,
+          "aten::_scaled_dot_product_efficient_attention": 1,
+          "aten::_efficient_attention_forward": 1
+        },
+        "probe::vae_decode": {
+          "aten::scaled_dot_product_attention": 1,
+          "aten::_scaled_dot_product_efficient_attention": 1,
+          "aten::_efficient_attention_forward": 1
+        }
+      },
+      "attention_gpu_kernels": {
+        "void pytorch_flash::flash_fwd_kernel<Flash_fwd_kernel_traits<96, 128, 64, 4, false, false, cutlass::bfloat16_t, Flash_kernel_traits<96, 128, 64, 4, cutlass::bfloat16_t> >, false, false, false, false, false, false, false, false>(pytorch_flash::Flash_fwd_params)": 704,
+        "fmha_cutlassF_bf16_aligned_64x128_rf_sm80(PyTorchMemEffAttention::AttentionKernel<cutlass::bfloat16_t, cutlass::arch::Sm80, true, 64, 128, 128, true, true>::Params)": 28,
+        "fmha_cutlassF_bf16_aligned_32x128_gmem_sm80(PyTorchMemEffAttention::AttentionKernel<cutlass::bfloat16_t, cutlass::arch::Sm80, true, 32, 128, 65536, true, true>::Params)": 2,
+        "void flash::flash_fwd_kernel<Flash_fwd_kernel_traits<128, 128, 64, 4, false, false, cutlass::bfloat16_t, Flash_kernel_traits<128, 128, 64, 4, cutlass::bfloat16_t> >, false, false, false, false, false, true, false, false>(flash::Flash_fwd_params)": 60
+      },
+      "total_gpu_kernel_events": 6047,
+      "pixel_sha256": "ce9bbcb7c49e2a8b5ae1ffbf6413b4a40962f82bb9876f90c018c21aa35e3951"
+    },
+    "baseline": {
+      "attention_components": {
+        "transformer": {
+          "implementations": [
+            "backend:FLASH_ATTN",
+            "impl:vllm_omni.diffusion.attention.backends.flash_attn.FlashAttentionImpl"
+          ],
+          "config_attn_implementation": null
+        },
+        "text_encoder": {
+          "implementations": [],
+          "config_attn_implementation": "sdpa"
+        },
+        "vae": {
+          "implementations": [
+            "processor:diffusers.models.attention_processor.AttnProcessor2_0"
+          ],
+          "config_attn_implementation": null
+        }
+      },
+      "sdpa_enabled": {
+        "flash": true,
+        "mem_efficient": true,
+        "math": true,
+        "cudnn": false
+      },
+      "component_attention_operators": {
+        "probe::text_encoder": {
+          "aten::scaled_dot_product_attention": 732,
+          "aten::_scaled_dot_product_flash_attention": 704,
+          "aten::_flash_attention_forward": 704,
+          "aten::_scaled_dot_product_efficient_attention": 28,
+          "aten::_efficient_attention_forward": 28
+        },
+        "probe::vae_encode": {
+          "aten::scaled_dot_product_attention": 1,
+          "aten::_scaled_dot_product_efficient_attention": 1,
+          "aten::_efficient_attention_forward": 1
+        },
+        "probe::vae_decode": {
+          "aten::scaled_dot_product_attention": 1,
+          "aten::_scaled_dot_product_efficient_attention": 1,
+          "aten::_efficient_attention_forward": 1
+        }
+      },
+      "attention_gpu_kernels": {
+        "void pytorch_flash::flash_fwd_kernel<Flash_fwd_kernel_traits<96, 128, 64, 4, false, false, cutlass::bfloat16_t, Flash_kernel_traits<96, 128, 64, 4, cutlass::bfloat16_t> >, false, false, false, false, false, false, false, false>(pytorch_flash::Flash_fwd_params)": 704,
+        "fmha_cutlassF_bf16_aligned_64x128_rf_sm80(PyTorchMemEffAttention::AttentionKernel<cutlass::bfloat16_t, cutlass::arch::Sm80, true, 64, 128, 128, true, true>::Params)": 28,
+        "fmha_cutlassF_bf16_aligned_32x128_gmem_sm80(PyTorchMemEffAttention::AttentionKernel<cutlass::bfloat16_t, cutlass::arch::Sm80, true, 32, 128, 65536, true, true>::Params)": 2,
+        "void flash::flash_fwd_kernel<Flash_fwd_kernel_traits<128, 128, 64, 4, false, false, cutlass::bfloat16_t, Flash_kernel_traits<128, 128, 64, 4, cutlass::bfloat16_t> >, false, false, false, false, false, true, false, false>(flash::Flash_fwd_params)": 60
+      },
+      "total_gpu_kernel_events": 6059,
+      "pixel_sha256": "ce9bbcb7c49e2a8b5ae1ffbf6413b4a40962f82bb9876f90c018c21aa35e3951"
+    },
+    "fixed": {
+      "attention_components": {
+        "transformer": {
+          "implementations": [
+            "backend:FLASH_ATTN",
+            "impl:vllm_omni.diffusion.attention.backends.flash_attn.FlashAttentionImpl"
+          ],
+          "config_attn_implementation": null
+        },
+        "text_encoder": {
+          "implementations": [],
+          "config_attn_implementation": "sdpa"
+        },
+        "vae": {
+          "implementations": [
+            "processor:diffusers.models.attention_processor.AttnProcessor2_0"
+          ],
+          "config_attn_implementation": null
+        }
+      },
+      "sdpa_enabled": {
+        "flash": true,
+        "mem_efficient": true,
+        "math": true,
+        "cudnn": false
+      },
+      "component_attention_operators": {
+        "probe::text_encoder": {
+          "aten::scaled_dot_product_attention": 732,
+          "aten::_scaled_dot_product_flash_attention": 704,
+          "aten::_flash_attention_forward": 704,
+          "aten::_scaled_dot_product_efficient_attention": 28,
+          "aten::_efficient_attention_forward": 28
+        },
+        "probe::vae_encode": {
+          "aten::scaled_dot_product_attention": 1,
+          "aten::_scaled_dot_product_efficient_attention": 1,
+          "aten::_efficient_attention_forward": 1
+        },
+        "probe::vae_decode": {
+          "aten::scaled_dot_product_attention": 1,
+          "aten::_scaled_dot_product_efficient_attention": 1,
+          "aten::_efficient_attention_forward": 1
+        }
+      },
+      "attention_gpu_kernels": {
+        "void pytorch_flash::flash_fwd_kernel<Flash_fwd_kernel_traits<96, 128, 64, 4, false, false, cutlass::bfloat16_t, Flash_kernel_traits<96, 128, 64, 4, cutlass::bfloat16_t> >, false, false, false, false, false, false, false, false>(pytorch_flash::Flash_fwd_params)": 704,
+        "fmha_cutlassF_bf16_aligned_64x128_rf_sm80(PyTorchMemEffAttention::AttentionKernel<cutlass::bfloat16_t, cutlass::arch::Sm80, true, 64, 128, 128, true, true>::Params)": 28,
+        "fmha_cutlassF_bf16_aligned_32x128_gmem_sm80(PyTorchMemEffAttention::AttentionKernel<cutlass::bfloat16_t, cutlass::arch::Sm80, true, 32, 128, 65536, true, true>::Params)": 2,
+        "void flash::flash_fwd_kernel<Flash_fwd_kernel_traits<128, 128, 64, 4, false, false, cutlass::bfloat16_t, Flash_kernel_traits<128, 128, 64, 4, cutlass::bfloat16_t> >, false, false, false, false, false, true, false, false>(flash::Flash_fwd_params)": 60
+      },
+      "total_gpu_kernel_events": 6059,
+      "pixel_sha256": "ce9bbcb7c49e2a8b5ae1ffbf6413b4a40962f82bb9876f90c018c21aa35e3951"
+    }
+  },
+  "comparisons_to_reference": {
+    "baseline": {
+      "attention_components_equal": true,
+      "sdpa_enabled_equal": true,
+      "component_attention_operators_equal": true,
+      "attention_gpu_kernels_equal": true,
+      "pixel_sha256_equal": true
+    },
+    "fixed": {
+      "attention_components_equal": true,
+      "sdpa_enabled_equal": true,
+      "component_attention_operators_equal": true,
+      "attention_gpu_kernels_equal": true,
+      "pixel_sha256_equal": true
+    }
+  }
+}
