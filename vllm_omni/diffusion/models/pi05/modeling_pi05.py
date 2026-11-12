@@ -271,6 +271,11 @@ class Pi05KVCache:
 
     The dtype is the action expert's K/V dtype: writing the prefix K/V casts it
     exactly as the ``.to(k_suf.dtype)`` before the concatenation it replaces.
+
+    A batch row's prefix slots are that request's whole conditioning state and
+    do not depend on the row or the batch they sit in, so a caller may copy them
+    into any row of another cache of the same prefix length. The suffix slots
+    are scratch: every denoising step rewrites them before reading them.
     """
 
     def __init__(
@@ -1680,6 +1685,11 @@ class Pi05ForActionPrediction(nn.Module):
         Signature differs from π0's by exactly one argument: no ``state``. With
         the fused kernels enabled, a batch-1 step runs the action expert and
         its output head on them (``_fused_denoise_forward``).
+
+        ``past_key_values`` is a ``Pi05KVCache`` of this batch size whose prefix
+        slots are filled (``encode_prefix``). The step reads them, overwrites
+        the suffix slots, and leaves the prefix slots unchanged, so one cache
+        serves every step of its requests.
         """
         suffix_embs, suffix_pad_masks, suffix_att_masks, time_cond = self.embed_suffix(x_t, timestep)
 
@@ -1726,6 +1736,91 @@ class Pi05ForActionPrediction(nn.Module):
         suffix_out = suffix_out.to(dtype=self.action_out_proj.weight.dtype)
         return self.action_out_proj(suffix_out)
 
+    # ── Step interface ───────────────────────────────────────────────
+    # ``sample_actions`` is ``initialize_noise`` + ``encode_prefix`` + a loop of
+    # ``denoise_step``. Step-level callers drive the same three calls
+    # themselves; ``tests/diffusion/models/pi05/test_pi05_step_interface.py``
+    # holds the contract they rely on.
+    @torch.no_grad()
+    def initialize_noise(
+        self,
+        lang_tokens: torch.Tensor,
+        generator: torch.Generator | list[torch.Generator] | None = None,
+    ) -> torch.Tensor:
+        """Draw the FP32 ``(batch, action_horizon, action_dim)`` starting noise.
+
+        A list of generators gives each request its own stream, so a request's
+        noise does not depend on which other requests share its batch.
+        """
+        bsize = lang_tokens.shape[0]
+        device = lang_tokens.device
+        noise_shape = (self.action_horizon, self.action_dim)
+        if isinstance(generator, list):
+            if len(generator) != bsize:
+                raise ValueError(f"Expected {bsize} generators, got {len(generator)}.")
+            return torch.stack(
+                [torch.randn(noise_shape, dtype=torch.float32, device=device, generator=item) for item in generator]
+            )
+        return torch.randn(bsize, *noise_shape, dtype=torch.float32, device=device, generator=generator)
+
+    @torch.no_grad()
+    def encode_prefix(
+        self,
+        images: list[torch.Tensor],
+        image_masks: list[torch.Tensor],
+        lang_tokens: torch.Tensor,
+        lang_masks: torch.Tensor,
+    ) -> tuple[torch.Tensor, Pi05KVCache]:
+        """Encode one observation into a cache the caller owns.
+
+        Returns ``(prefix_pad_masks, kv_cache)``, the two conditioning inputs of
+        ``denoise_step``. Both are fresh tensors: this never writes
+        ``self.kv_cache`` and never runs through the CUDA graphs, whose outputs
+        are static buffers the next replay overwrites. The prefix slots of the
+        returned cache stay valid for as long as the caller keeps it, whatever
+        other requests the model serves in between.
+        """
+        return self._encode_prefix(images, image_masks, lang_tokens, lang_masks, kv_cache=None, graphs=None)
+
+    def _encode_prefix(
+        self,
+        images: list[torch.Tensor],
+        image_masks: list[torch.Tensor],
+        lang_tokens: torch.Tensor,
+        lang_masks: torch.Tensor,
+        *,
+        kv_cache: Pi05KVCache | None,
+        graphs: Pi05CUDAGraphs | None,
+    ) -> tuple[torch.Tensor, Pi05KVCache]:
+        """Embed the prefix and write its per-layer K/V into ``kv_cache``.
+
+        ``kv_cache`` is reused when it fits the batch and prefix length, and
+        replaced by a new one otherwise. Each region runs through ``graphs``
+        when given, and falls back to its eager call on its own.
+        """
+        embed_prefix = self.embed_prefix if graphs is None else graphs.embed_prefix
+        prefix_forward = self.paligemma_with_expert.forward if graphs is None else graphs.prefix_forward
+
+        # 1. Prefix embeddings + mask building.
+        prefix_embs, prefix_pad_masks, prefix_att_masks = embed_prefix(images, image_masks, lang_tokens, lang_masks)
+        prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
+        prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
+        prefix_att_2d_masks_4d = prepare_attention_masks_4d(prefix_att_2d_masks)
+
+        # 2. Forward prefix through PaliGemma LM, writing its per-layer K/V into
+        #    the cache the denoising steps then extend and read.
+        bsize = prefix_embs.shape[0]
+        if kv_cache is None or not kv_cache.fits(bsize, prefix_embs.shape[1]):
+            kv_cache = self.new_kv_cache(bsize, prefix_embs.shape[1])
+        _, past_key_values = prefix_forward(
+            attention_mask=prefix_att_2d_masks_4d,
+            position_ids=prefix_position_ids,
+            past_key_values=kv_cache,
+            inputs_embeds=[prefix_embs, None],
+            use_cache=True,
+        )
+        return prefix_pad_masks, past_key_values
+
     # ── Full action generation ───────────────────────────────────────
     @torch.no_grad()
     def sample_actions(
@@ -1751,46 +1846,15 @@ class Pi05ForActionPrediction(nn.Module):
         bsize = lang_tokens.shape[0]
         device = lang_tokens.device
         if noise is None:
-            noise_shape = (self.action_horizon, self.action_dim)
-            if isinstance(generator, list):
-                if len(generator) != bsize:
-                    raise ValueError(f"Expected {bsize} generators, got {len(generator)}.")
-                noise = torch.stack(
-                    [torch.randn(noise_shape, dtype=torch.float32, device=device, generator=item) for item in generator]
-                )
-            else:
-                noise = torch.randn(
-                    bsize,
-                    *noise_shape,
-                    dtype=torch.float32,
-                    device=device,
-                    generator=generator,
-                )
+            noise = self.initialize_noise(lang_tokens, generator)
 
-        # The three regions below run through CUDA graphs when installed; each
-        # falls back to its eager call on its own.
+        # The three regions run through CUDA graphs when installed; each falls
+        # back to its eager call on its own. Regions 1 and 2 are the prefix,
+        # written into ``self.kv_cache`` when it fits.
         graphs = self.cuda_graphs
-        embed_prefix = self.embed_prefix if graphs is None else graphs.embed_prefix
-        prefix_forward = self.paligemma_with_expert.forward if graphs is None else graphs.prefix_forward
         denoise_step = self.denoise_step if graphs is None else graphs.denoise_step
-
-        # 1. Prefix embeddings + mask building.
-        prefix_embs, prefix_pad_masks, prefix_att_masks = embed_prefix(images, image_masks, lang_tokens, lang_masks)
-        prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
-        prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
-        prefix_att_2d_masks_4d = prepare_attention_masks_4d(prefix_att_2d_masks)
-
-        # 2. Forward prefix through PaliGemma LM, writing its per-layer K/V into
-        #    the cache the denoising steps then extend and read.
-        kv_cache = self.kv_cache
-        if kv_cache is None or not kv_cache.fits(bsize, prefix_embs.shape[1]):
-            kv_cache = self.new_kv_cache(bsize, prefix_embs.shape[1])
-        _, past_key_values = prefix_forward(
-            attention_mask=prefix_att_2d_masks_4d,
-            position_ids=prefix_position_ids,
-            past_key_values=kv_cache,
-            inputs_embeds=[prefix_embs, None],
-            use_cache=True,
+        prefix_pad_masks, past_key_values = self._encode_prefix(
+            images, image_masks, lang_tokens, lang_masks, kv_cache=self.kv_cache, graphs=graphs
         )
 
         # 3. Euler-integrated denoising from t=1 down to t=0.
